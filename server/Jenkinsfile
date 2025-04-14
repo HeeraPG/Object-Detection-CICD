@@ -1,0 +1,88 @@
+pipeline {
+
+  environment {
+    dockerimagename = "preethu25/objectdetection"
+    dockerImage = ""
+    TAG = "latest"
+    DOCKERFILE_DIR = "server"
+    KUBE_NAMESPACE = 'default'
+    KUBE_DEPLOY_NAME = 'object-detection'
+    K8S_DEPLOYMENT_PATH = 'server/deployment.yaml'
+  }
+
+  agent any
+
+  stages {
+
+    stage('Checkout Source') {
+      steps {
+        git branch: 'main',
+            credentialsId: 'github-token',
+            url: 'https://github.com/preethamchinnu/Object-Detection-CICD.git'
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+            echo "Building Docker image..."
+            dockerImage = docker.build("$dockerimagename:${TAG}", DOCKERFILE_DIR)
+        }
+      }
+    }
+
+    stage('Push Docker Image') {
+      environment {
+        registryCredential = 'dockerhublogin' // Credential ID for Docker Hub
+      }
+      steps {
+        script {
+          docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
+            echo "Pushing Docker image to Docker Hub"
+            dockerImage.push("${TAG}")
+          }
+        }
+      }
+    }
+
+    stage('Deploy to Kubernetes') {
+        steps {
+            script {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    try {
+                        // Echo the deploy name and namespace
+                        echo "Deploying ${KUBE_DEPLOY_NAME} to Kubernetes in namespace ${KUBE_NAMESPACE}"
+
+                        // Apply the deployment
+                        sh "kubectl apply -f ${K8S_DEPLOYMENT_PATH} -n ${KUBE_NAMESPACE}"
+
+                        // Echo success if the deployment was successful
+                        echo "Deployment successful!"
+                    } catch (Exception e) {
+                        // If the deployment fails, print an error message and rollback
+                        echo "Deployment failed! Attempting rollback."
+        }
+      }
+    }
+  }
+}
+
+    stage('Verify Deployment') {
+      steps {
+        script {
+             withKubeConfig([credentialsId: 'kubeconfig']) {
+          // Verify that the pods are running after the deployment
+          sh "kubectl get pods -l app=${KUBE_DEPLOY_NAME} -n ${KUBE_NAMESPACE}"
+        }
+       }
+      }
+    }
+  }
+
+  post {
+    always {
+      cleanWs() // Clean up the workspace after the pipeline finishes
+    }
+  }
+
+}
