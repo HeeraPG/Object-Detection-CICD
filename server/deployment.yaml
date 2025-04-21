@@ -47,5 +47,5 @@ spec:
     app: object-detection
   ports:
     - protocol: TCP
-      port: 80
+      port: 51821
       targetPort: 51821
