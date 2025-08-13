@@ -1,88 +1,71 @@
+def dockerImage
+
 pipeline {
+  agent any
+  options { timestamps() }
 
   environment {
-    dockerimagename = "hpgowda/objectdetection:latest"
-    dockerImage = ""
-    TAG = "latest"
-    DOCKERFILE_DIR = "server"
-    KUBE_NAMESPACE = 'default'
-    KUBE_DEPLOY_NAME = 'object-detection'
-    K8S_DEPLOYMENT_PATH = 'server/deployment.yaml'
+    IMAGE               = "hpgowda/objectdetection:latest"  // must be lowercase
+    REG_CRED            = "dockerhublogin"                  // Docker Hub Jenkins cred ID
+    K8S_NS              = "kubeedge"
+    KUBE_DEPLOY_NAME    = "object-detection"
+    K8S_DEPLOYMENT_YAML = "server/deployment.yaml"
   }
 
-  agent any
-
   stages {
-
-    stage('Checkout Source') {
-      steps {
-        git branch: 'main',
-            credentialsId: 'github',
-            url: 'https://github.com/HeeraPG/Object-Detection-CICD.git'
-      }
+    // Use the job's SCM config; DO NOT add another git() here
+    stage('Checkout') {
+      steps { checkout scm }
     }
 
     stage('Build Docker Image') {
       steps {
         script {
-            echo "Building Docker image..."
-            dockerImage = docker.build("$dockerimagename:${TAG}", DOCKERFILE_DIR)
+          echo "Building Docker image..."
+          sh 'docker build -f server/Dockerfile -t $IMAGE .'
         }
       }
     }
 
     stage('Push Docker Image') {
-      environment {
-        registryCredential = 'dockerhublogin' // Credential ID for Docker Hub
-      }
       steps {
         script {
-          docker.withRegistry('https://registry.hub.docker.com', registryCredential) {
-            echo "Pushing Docker image to Docker Hub"
-            dockerImage.push("${TAG}")
+          docker.withRegistry('https://index.docker.io/v1/', env.REG_CRED) {
+            sh 'docker push $IMAGE'
           }
         }
       }
     }
 
     stage('Deploy to Kubernetes') {
-        steps {
-            script {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    try {
-                        // Echo the deploy name and namespace
-                        echo "Deploying ${KUBE_DEPLOY_NAME} to Kubernetes in namespace ${KUBE_NAMESPACE}"
-
-                        // Apply the deployment
-                        sh "kubectl apply -f ${K8S_DEPLOYMENT_PATH} -n ${KUBE_NAMESPACE}"
-
-                        // Echo success if the deployment was successful
-                        echo "Deployment successful!"
-                    } catch (Exception e) {
-                        // If the deployment fails, print an error message and rollback
-                        echo "Deployment failed! Attempting rollback."
+      steps {
+        script {
+          withKubeConfig([credentialsId: 'kubeconfig']) {
+            // keep manifest image in sync (safe if already correct)
+            sh "sed -i 's|image:[[:space:]]*[^[:space:]]*/objectdetection:latest|image: $IMAGE|' $K8S_DEPLOYMENT_YAML || true"
+            sh 'kubectl -n $K8S_NS apply -f $K8S_DEPLOYMENT_YAML'
+          }
         }
       }
     }
-  }
-}
 
     stage('Verify Deployment') {
       steps {
         script {
-             withKubeConfig([credentialsId: 'kubeconfig']) {
-          // Verify that the pods are running after the deployment
-          sh "kubectl get pods -l app=${KUBE_DEPLOY_NAME} -n ${KUBE_NAMESPACE}"
+          withKubeConfig([credentialsId: 'kubeconfig']) {
+            sh 'kubectl -n $K8S_NS rollout status deploy/$KUBE_DEPLOY_NAME --timeout=180s'
+            sh 'kubectl -n $K8S_NS get pods -l app=$KUBE_DEPLOY_NAME -o wide'
+            sh 'kubectl -n $K8S_NS get svc $KUBE_DEPLOY_NAME'
+          }
         }
-       }
       }
     }
   }
 
   post {
     always {
-      cleanWs() // Clean up the workspace after the pipeline finishes
+      sh 'docker logout || true'
+      cleanWs()
     }
   }
-
 }
