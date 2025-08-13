@@ -9,9 +9,11 @@ COPY yolov8n.pt /app
 COPY server_w_time_object_detector_simplified.py /app
 
 # Installiere systemweite Abh�ngigkeiten 
-RUN apt-get update && apt-get install --no-install-recommends -y \ 
-	libgl1-mesa-glx \ 
-	libglib2.0-0 
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    libgl1 \
+    libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
 
 # Install any needed packages specified in requirements.txt
 RUN pip install numpy==2.2.0 && \ 
