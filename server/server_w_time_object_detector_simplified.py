@@ -9,10 +9,10 @@ os.system("pip install ultralytics")
 from ultralytics import YOLO
 
 # Ensure necessary directories exist
-os.makedirs("/app/data", exist_ok=True)
+os.makedirs("/output", exist_ok=True)
 
 # File Paths
-received_image_path = "/app/data/received_data.jpg"
+received_image_path = "/output/received_data.jpg"
 
 def get_container_ip():
     """Get the IP address of the Docker container."""

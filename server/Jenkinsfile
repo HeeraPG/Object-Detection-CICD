@@ -1,7 +1,7 @@
 pipeline {
 
   environment {
-    dockerimagename = "preethu25/objectdetection"
+    dockerimagename = "HPGowda/objectdetection"
     dockerImage = ""
     TAG = "latest"
     DOCKERFILE_DIR = "server"
@@ -17,8 +17,8 @@ pipeline {
     stage('Checkout Source') {
       steps {
         git branch: 'main',
-            credentialsId: 'github-token',
-            url: 'https://github.com/preethamchinnu/Object-Detection-CICD.git'
+            credentialsId: 'github',
+            url: 'https://github.com/HeeraPG/CICD_Loop.git'
       }
     }
 
