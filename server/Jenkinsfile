@@ -41,26 +41,52 @@ pipeline {
       steps {
         script {
           withKubeConfig([credentialsId: 'kubeconfig']) {
-            // keep manifest image in sync (safe if already correct)
-            sh "sed -i 's|image:[[:space:]]*[^[:space:]]*/objectdetection:latest|image: $IMAGE|' $K8S_DEPLOYMENT_YAML || true"
-            sh 'kubectl -n $K8S_NS apply -f $K8S_DEPLOYMENT_YAML'
+            withEnv([
+              'HTTP_PROXY=', 'http_proxy=',
+              'HTTPS_PROXY=', 'https_proxy=',
+              'NO_PROXY=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local',
+              'no_proxy=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local'
+            ]) {
+              sh '''
+                set -e
+                # ensure namespace exists (no-op if it already does)
+                kubectl get ns "$K8S_NS" >/dev/null 2>&1 || kubectl create ns "$K8S_NS"
+
+                # keep manifest image in sync; use double quotes so $IMAGE expands
+                sed -i "s|image:[[:space:]]*[^[:space:]]*/objectdetection:latest|image: $IMAGE|" "$K8S_DEPLOYMENT_YAML" || true
+
+                # apply without schema validation (skips OpenAPI fetch that hits proxy)
+                kubectl -n "$K8S_NS" apply -f "$K8S_DEPLOYMENT_YAML" --validate=false
+              '''
+            }
           }
         }
       }
     }
 
+
     stage('Verify Deployment') {
       steps {
         script {
           withKubeConfig([credentialsId: 'kubeconfig']) {
-            sh 'kubectl -n $K8S_NS rollout status deploy/$KUBE_DEPLOY_NAME --timeout=180s'
-            sh 'kubectl -n $K8S_NS get pods -l app=$KUBE_DEPLOY_NAME -o wide'
-            sh 'kubectl -n $K8S_NS get svc $KUBE_DEPLOY_NAME'
+            withEnv([
+              'HTTP_PROXY=', 'http_proxy=',
+              'HTTPS_PROXY=', 'https_proxy=',
+              'NO_PROXY=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local',
+              'no_proxy=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local'
+            ]) {
+              sh '''
+                set -e
+                kubectl -n "$K8S_NS" rollout status deploy/"$KUBE_DEPLOY_NAME" --timeout=180s
+                kubectl -n "$K8S_NS" get pods -l app="$KUBE_DEPLOY_NAME" -o wide
+                kubectl -n "$K8S_NS" get svc "$KUBE_DEPLOY_NAME" -o wide
+              '''
+            }
           }
         }
       }
     }
-  }
+
 
   post {
     always {
