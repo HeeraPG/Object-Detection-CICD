@@ -1,29 +1,21 @@
-def dockerImage
-
 pipeline {
   agent any
   options { timestamps() }
 
   environment {
-    IMAGE               = "hpgowda/objectdetection:latest"  // must be lowercase
-    REG_CRED            = "dockerhublogin"                  // Docker Hub Jenkins cred ID
-    K8S_NS              = "kubeedge"
-    KUBE_DEPLOY_NAME    = "object-detection"
-    K8S_DEPLOYMENT_YAML = "server/deployment.yaml"
+    IMAGE               = 'hpgowda/objectdetection:latest'
+    REG_CRED            = 'dockerhublogin'
+    K8S_NS              = 'kubeedge'
+    KUBE_DEPLOY_NAME    = 'object-detection'
+    K8S_DEPLOYMENT_YAML = 'server/deployment.yaml'
   }
 
   stages {
-    // Use the job's SCM config; DO NOT add another git() here
-    stage('Checkout') {
-      steps { checkout scm }
-    }
+    stage('Checkout') { steps { checkout scm } }
 
     stage('Build Docker Image') {
       steps {
-        script {
-          echo "Building Docker image..."
-          sh 'docker build -f server/Dockerfile -t $IMAGE .'
-        }
+        sh 'docker build -f server/Dockerfile -t $IMAGE server'
       }
     }
 
@@ -41,9 +33,18 @@ pipeline {
       steps {
         script {
           withKubeConfig([credentialsId: 'kubeconfig']) {
-            // keep manifest image in sync (safe if already correct)
-            sh "sed -i 's|image:[[:space:]]*[^[:space:]]*/objectdetection:latest|image: $IMAGE|' $K8S_DEPLOYMENT_YAML || true"
-            sh 'kubectl -n $K8S_NS apply -f $K8S_DEPLOYMENT_YAML'
+            withEnv([
+              'HTTP_PROXY=','http_proxy=',
+              'HTTPS_PROXY=','https_proxy=',
+              'NO_PROXY=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local',
+              'no_proxy=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local'
+            ]) {
+              sh '''
+                set -e
+                sed -i "s|image:[[:space:]]*[^[:space:]]*/objectdetection:latest|image: $IMAGE|" "$K8S_DEPLOYMENT_YAML" || true
+                kubectl -n "$K8S_NS" apply -f "$K8S_DEPLOYMENT_YAML" --validate=false
+              '''
+            }
           }
         }
       }
@@ -53,9 +54,19 @@ pipeline {
       steps {
         script {
           withKubeConfig([credentialsId: 'kubeconfig']) {
-            sh 'kubectl -n $K8S_NS rollout status deploy/$KUBE_DEPLOY_NAME --timeout=180s'
-            sh 'kubectl -n $K8S_NS get pods -l app=$KUBE_DEPLOY_NAME -o wide'
-            sh 'kubectl -n $K8S_NS get svc $KUBE_DEPLOY_NAME'
+            withEnv([
+              'HTTP_PROXY=','http_proxy=',
+              'HTTPS_PROXY=','https_proxy=',
+              'NO_PROXY=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local',
+              'no_proxy=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local'
+            ]) {
+              sh '''
+                set -e
+                kubectl -n "$K8S_NS" rollout status deploy/"$KUBE_DEPLOY_NAME" --timeout=180s
+                kubectl -n "$K8S_NS" get pods -l app="$KUBE_DEPLOY_NAME" -o wide
+                kubectl -n "$K8S_NS" get svc "$KUBE_DEPLOY_NAME" -o wide
+              '''
+            }
           }
         }
       }
