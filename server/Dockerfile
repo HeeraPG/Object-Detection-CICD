@@ -10,7 +10,7 @@ COPY server_w_time_object_detector_simplified.py /app
 
 # Installiere systemweite Abh�ngigkeiten 
 RUN apt-get update && apt-get install --no-install-recommends -y \ 
-	libgl1-mesa-glx \ 
+	libgl1 \ 
 	libglib2.0-0 
 
 # Install any needed packages specified in requirements.txt
