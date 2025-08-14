@@ -19,7 +19,7 @@ spec:
         node-role.kubernetes.io/edge: ""  
       containers:
         - name: object-detection
-          image: HPGowda/objectdetection:latest
+          image: hpgowda/objectdetection:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 51821
