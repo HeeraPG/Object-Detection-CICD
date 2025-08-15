@@ -29,27 +29,22 @@ pipeline {
       }
     }
 
-   stage('Deploy to Kubernetes') {
-        steps {
-            script {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    try {
-                        // Echo the deploy name and namespace
-                        echo "Deploying ${KUBE_DEPLOY_NAME} to Kubernetes in namespace ${KUBE_NAMESPACE}"
-
-                        // Apply the deployment
-                        sh "kubectl apply -f ${K8S_DEPLOYMENT_PATH} -n ${KUBE_NAMESPACE}"
-
-                        // Echo success if the deployment was successful
-                        echo "Deployment successful!"
-                    } catch (Exception e) {
-                        // If the deployment fails, print an error message and rollback
-                        echo "Deployment failed! Attempting rollback."
+    stage('Deploy to Kubernetes') {
+      steps {
+        script {
+          withKubeConfig([credentialsId: 'kubeconfig']) {
+            try {
+              echo "Deploying ${KUBE_DEPLOY_NAME} to Kubernetes in namespace ${K8S_NS}"
+              sh "kubectl apply -f ${K8S_DEPLOYMENT_YAML} -n ${K8S_NS}"
+              echo "Deployment successful!"
+            } catch (Exception e) {
+              echo "Deployment failed! Attempting rollback."
+            }
+          }
         }
       }
     }
-  }
-}
+
 
     stage('Verify Deployment') {
       steps {
