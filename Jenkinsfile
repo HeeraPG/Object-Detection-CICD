@@ -54,31 +54,19 @@ pipeline {
     stage('Verify Deployment') {
       steps {
         script {
-          withKubeConfig([credentialsId: 'kubeconfig']) {
-            withEnv([
-              'HTTP_PROXY=','http_proxy=',
-              'HTTPS_PROXY=','https_proxy=',
-              'NO_PROXY=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local',
-              'no_proxy=193.196.54.78,127.0.0.1,localhost,.svc,.cluster.local'
-            ]) {
-              sh '''
-                set -e
-                kubectl -n "$K8S_NS" rollout status deploy/"$KUBE_DEPLOY_NAME" --timeout=180s
-                kubectl -n "$K8S_NS" get pods -l app="$KUBE_DEPLOY_NAME" -o wide
-                kubectl -n "$K8S_NS" get svc "$KUBE_DEPLOY_NAME" -o wide
-              '''
-            }
-          }
+             withKubeConfig([credentialsId: 'kubeconfig']) {
+          // Verify that the pods are running after the deployment
+          sh "kubectl get pods -l app=${KUBE_DEPLOY_NAME} -n ${KUBE_NAMESPACE}"
         }
+       }
       }
     }
   }
 
-
   post {
     always {
-      sh 'docker logout || true'
-      cleanWs()
+      cleanWs() // Clean up the workspace after the pipeline finishes
     }
   }
+
 }
